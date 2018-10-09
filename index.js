@@ -14,24 +14,13 @@ function UdpMultiswitch(log, config) {
     this.log = log;
 
     this.name            = config.name || 'Blauberg Vento';
-    this.switchType      = config.switch_type;           
     this.host            = config.host;
-    this.port            = config.port || 80;
+    this.port            = config.port || 4000;
 
     this.onPayload      = config.on_payload;
     this.offPayload     = config.off_payload;
 
-    this.multiswitch     = config.multiswitch;
 
-    switch (this.switchType) {
-        case 'Switch':
-            break;
-        case 'Multiswitch':
-            break;
-
-        default:
-            throw new Error('Unknown  switch type');
-    }
 }
 
 UdpMultiswitch.prototype = {
@@ -55,36 +44,9 @@ UdpMultiswitch.prototype = {
             return;
         }
 
-        switch(this.switchType) {
-            case 'Switch':
-                if (!this.onPayload || !this.offPayload) {
-                    this.log.warn('Ignoring request; No power state payloads defined.');
-                    callback(new Error('No power state payloads defined.'));
-                    return;
-                }
 
-                payload  = powerState ? this.onPayload  : this.offPayload;
-                break;
-
-            case 'Multiswitch':
-                this.services.forEach(function (switchService, idx) {
-                    if (idx === 0) {
-                        // Don't check the informationService which is at idx=0
-                        return;
-                    }
-
-                    if (targetService.subtype === switchService.subtype) {
-                        payload = this.multiswitch[idx-1].payload;
-                        
-                    } else {
-                        switchService.getCharacteristic(Characteristic.On).setValue(false, undefined, funcContext);
-                    }
-                }.bind(this));
-                break;
-
-            default:
-                this.log('Unknown  type in setPowerState');
-        }
+        payload  = powerState ? this.onPayload  : this.offPayload;
+               
 
         this.udpRequest(this.host, this.port, payload, function(error) {
             if (error) {
@@ -93,16 +55,7 @@ UdpMultiswitch.prototype = {
             
                 callback(error);
             } else {
-                switch (this.switchType) {
-                    case 'Switch':
-                        this.log.info('==> ' + (powerState ? "On" : "Off"));
-                        break;
-                    case 'Multiswitch':
-                        this.log('==> ' + targetService.subtype);
-                        break;
-                    default:
-                        this.log.error('Unknown switchType in request callback');
-                }
+                this.log.info('==> ' + (powerState ? "On" : "Off"));
             }
             callback();
         }.bind(this));
@@ -122,49 +75,25 @@ UdpMultiswitch.prototype = {
             .setCharacteristic(Characteristic.Model, 'Vento Expert');
         this.services.push(informationService);
 
-        switch (this.switchType) {
-            case 'Switch':
-                this.log('(switch)');
+        var filterService =  new Service.FilterMaintenance(this.name);
+        filterService
+            .getCharacteristic(Characteristic.FilterChangeIndication)
+            .on('get', function(){
 
-                var switchService = new Service.Switch(this.name);
-                switchService
-                    .getCharacteristic(Characteristic.On)
-                    .on('set', this.setPowerState.bind(this, switchService));
+            })
+        ;
+        this.services.push(filterService);
 
-                this.services.push(switchService);
+        var switchService = new Service.Switch(this.name);
+        switchService
+            .getCharacteristic(Characteristic.On)//Characteristic.CurrentAirPurifierState
+           // .on('get', this.setPowerState.bind(this, switchService))
+            .on('set', this.setPowerState.bind(this, switchService))
+        ;
 
-                break;
-            case 'Multiswitch':
-                this.log('(multiswitch)');
+        this.services.push(switchService);
 
-                for (var i = 0; i < this.multiswitch.length; i++) {
-                    var switchName = this.multiswitch[i].name;
-
-                    switch(i) {
-                        case 0:
-                            this.log.warn('---+--- ' + switchName); break;
-                        case this.multiswitch.length-1:
-                            this.log.warn('   +--- ' + switchName); break;
-                        default:
-                            this.log.warn('   |--- ' + switchName);
-                    }
-
-                    var switchService = new Service.Switch(switchName, switchName);
-
-                    // Bind a copy of the setPowerState function that sets 'this' to the accessory and the first parameter
-                    // to the particular service that it is being called for. 
-                    var boundSetPowerState = this.setPowerState.bind(this, switchService);
-                    switchService
-                        .getCharacteristic(Characteristic.On)
-                        .on('set', boundSetPowerState);
-
-                    this.services.push(switchService);
-                }
-
-                break;
-            default:
-                this.log('Unknown  type in getServices');
-        }
+     
         
         return this.services;
     }

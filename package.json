@@ -1,13 +1,13 @@
 {
-  "name": "homebridge-udp-multiswitch",
-  "version": "1.0.3",
-  "author": "nitaybz",
-  "description": "Simple UDP switches for Homebridge - stateful and radio-button/multi-switch (forked from homebridge-http-multiswitch)",
+  "name": "homebridge-blauberg-vento",
+  "version": "1.0.0",
+  "author": "Vasyl Kuzenko",
+  "description": "",
   "license": "MIT",
-  "homepage": "https://github.com/nitaybz/homebridge-udp-multiswitch#readme",
+  "homepage": "",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nitaybz/homebridge-udp-multiswitch.git"
+    "url": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-blauberg-vento.git"
   },
   "keywords": [
     "homebridge-plugin",
@@ -20,8 +20,5 @@
     "node": ">=0.12.0",
     "homebridge": ">=0.2.0"
   },
-  "dependencies": {},
-  "bugs": {
-    "url": "https://github.com/nitaybz/homebridge-udp-multiswitch/issues"
-  }
+  "dependencies": {}
 }

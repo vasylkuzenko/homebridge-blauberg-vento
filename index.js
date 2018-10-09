@@ -7,13 +7,13 @@ var udp = require('./udp');
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
-    homebridge.registerAccessory('homebridge-udp-multiswitch', 'UdpMultiswitch', UdpMultiswitch);
+    homebridge.registerAccessory('homebridge-blauberg-vento', 'BlaubergVento', UdpMultiswitch);
 };
 
 function UdpMultiswitch(log, config) {
     this.log = log;
 
-    this.name            = config.name || 'MultiSwitch';
+    this.name            = config.name || 'Blauberg Vento';
     this.switchType      = config.switch_type;           
     this.host            = config.host;
     this.port            = config.port || 80;
@@ -30,7 +30,7 @@ function UdpMultiswitch(log, config) {
             break;
 
         default:
-            throw new Error('Unknown homebridge-udp-multiswitch switch type');
+            throw new Error('Unknown  switch type');
     }
 }
 
@@ -83,7 +83,7 @@ UdpMultiswitch.prototype = {
                 break;
 
             default:
-                this.log('Unknown homebridge-udp-multiswitch type in setPowerState');
+                this.log('Unknown  type in setPowerState');
         }
 
         this.udpRequest(this.host, this.port, payload, function(error) {
@@ -118,8 +118,8 @@ UdpMultiswitch.prototype = {
 
         var informationService = new Service.AccessoryInformation();
         informationService
-            .setCharacteristic(Characteristic.Manufacturer, 'Udp-MultiSwitch')
-            .setCharacteristic(Characteristic.Model, 'Udp-MultiSwitch');
+            .setCharacteristic(Characteristic.Manufacturer, 'Blauberg')
+            .setCharacteristic(Characteristic.Model, 'Vento Expert');
         this.services.push(informationService);
 
         switch (this.switchType) {
@@ -163,7 +163,7 @@ UdpMultiswitch.prototype = {
 
                 break;
             default:
-                this.log('Unknown homebridge-udp-multiswitch type in getServices');
+                this.log('Unknown  type in getServices');
         }
         
         return this.services;

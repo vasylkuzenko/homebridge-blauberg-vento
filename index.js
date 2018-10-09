@@ -27,6 +27,7 @@ UdpMultiswitch.prototype = {
 
     udpRequest: function(host, port, payload, callback) {
         udp(host, port, payload, function (err) {
+            this.log('udp err msg',err);
             callback(err);
         });
     },
@@ -60,6 +61,27 @@ UdpMultiswitch.prototype = {
             callback();
         }.bind(this));
     },
+    
+    getFilterStatus: function(targetService, powerState, callback, context) {
+        var funcContext = 'fromSetPowerState';
+        var payload;
+
+        // Callback safety
+
+        
+     
+        this.udpRequest(this.host, this.port, '6D6F62696C6504030D0A', function(error) {
+            if (error) {
+                this.log.error('setPowerState failed: ' + error.message);
+                this.log('response: ' + response + '\nbody: ' + responseBody);
+            
+                callback(error);
+            } else {
+                this.log.info('==> ' + (powerState ? "On" : "Off"));
+            }
+            callback(null , 1);
+        }.bind(this));
+    },
 
     identify: function (callback) {
         this.log('Identify me Senpai!');
@@ -78,9 +100,7 @@ UdpMultiswitch.prototype = {
         var filterService =  new Service.FilterMaintenance(this.name);
         filterService
             .getCharacteristic(Characteristic.FilterChangeIndication)
-            .on('get', function(){
-
-            })
+            .on('get', this.getFilterStatus.bind(this, filterService))
         ;
         this.services.push(filterService);
 

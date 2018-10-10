@@ -209,7 +209,7 @@ UdpMultiswitch.prototype = {
         this.services.push(informationService);
 
 
-        var fanService = new Service.Fan(this.name);
+        var fanService = new Service.Fanv2(this.name);
         fanService
             .getCharacteristic(Characteristic.Active)
             .on('get', this.getPowerState.bind(this, fanService))

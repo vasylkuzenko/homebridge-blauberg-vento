@@ -6,6 +6,13 @@ var Characteristic;
 var broadcast = '000000000000000009000000e00729070b00170a00000000c0a80a0555c100008ec20000000006000000000000000000';
 var dgram = require('dgram');
 
+// EXAMPLE CONFIG
+// {
+//     "accessory": "BlaubergVento",
+//     "name": "Vento Bedroom",
+//     "host": "10.0.1.70",
+//     "serialNumber": "000100105746430F"
+// }
 
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;

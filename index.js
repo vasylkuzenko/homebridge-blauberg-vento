@@ -10,8 +10,8 @@ var dgram = require('dgram');
 // {
 //     "accessory": "BlaubergVento",
 //     "name": "Vento Bedroom",
-//     "host": "10.0.1.70",
-//     "serialNumber": "000100105746430F"
+//     "host": "10.0.0.00",
+//     "serialNumber": "000100101234430F"
 // }
 
 module.exports = function (homebridge) {

@@ -19,9 +19,8 @@ function UdpMultiswitch(log, config) {
     this.name            = config.name || 'Blauberg Vento';
     this.host            = config.host;
     this.port            = config.port || 4000;
+    this.serialNumber    = config.serialNumber || '';
 
-    this.onPayload      = config.on_payload;
-    this.offPayload     = config.off_payload;
 
     this.currentActiveStatus  = null;
 }
@@ -141,7 +140,9 @@ UdpMultiswitch.prototype = {
         var informationService = new Service.AccessoryInformation();
         informationService
             .setCharacteristic(Characteristic.Manufacturer, 'Blauberg')
-            .setCharacteristic(Characteristic.Model, 'Vento Expert');
+            .setCharacteristic(Characteristic.Model, 'Vento Expert')
+            .setCharacteristic(Characteristic.SerialNumber, this.serialNumber)
+        ;
         this.services.push(informationService);
 
 

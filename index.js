@@ -62,6 +62,24 @@ UdpMultiswitch.prototype = {
         return JSON.parse(JSON.stringify(data)).data;
     },
 
+    getFilterStatus: function (targetService, callback, context) {
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getFilterStatus failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+            that.currentActiveStatus = msg[31];
+
+            that.log.info('getFilterStatus success: ', msg[31]);
+            callback(null, msg[31]);
+        });
+    },
+
+
     getCustomSpeed: function (targetService, callback, context) {
         var that = this;
         var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
@@ -157,18 +175,13 @@ UdpMultiswitch.prototype = {
             .on('get', this.getCustomSpeed.bind(this, fanService))
             .on('set', this.setCustomSpeed.bind(this, fanService))
         ;
-        // fanService
-        //     .setCharacteristic(Characteristic.SwingMode, 1)
-        //    // .on('get', this.setPowerState.bind(this, switchService))
-        //   //  .on('set', this.setCustomSpeed.bind(this, fanService))
-        // ;
-        // fanService
-        //     .setCharacteristic(Characteristic.RotationDirection, 1)
-        //    // .on('get', this.setPowerState.bind(this, switchService))
-        //   //  .on('set', this.setCustomSpeed.bind(this, fanService))
-        // ;
+        fanService
+            .getCharacteristic(Characteristic.FilterChangeIndication)
+            .on('get', this.getFilterStatus.bind(this, fanService))
+        ;
 
         this.services.push(fanService);
+
 
      
         

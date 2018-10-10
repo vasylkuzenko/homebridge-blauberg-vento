@@ -23,7 +23,7 @@ function UdpMultiswitch(log, config) {
     this.onPayload      = config.on_payload;
     this.offPayload     = config.off_payload;
 
-
+    this.currentActiveStatus  = null;
 }
 
 UdpMultiswitch.prototype = {
@@ -48,7 +48,7 @@ UdpMultiswitch.prototype = {
                     client.on('message', function(msg, rinfo){
                         console.log('UDP message get', msg);
                         callbackResponse(msg, rinfo);
-                    client.close();
+                        client.close();
                     });
             
                     callback(err);
@@ -56,6 +56,7 @@ UdpMultiswitch.prototype = {
                 
             });
         }, delayTime);
+
     },
 
     _parseResponseBuffer: function(data){
@@ -72,6 +73,7 @@ UdpMultiswitch.prototype = {
             }
         }, function (msg, rinfo) {
             msg = that._parseResponseBuffer(msg);
+            that.currentActiveStatus = msg[7];
 
             var speed = msg[21];
             speed = Math.round(speed/255*100);
@@ -108,22 +110,29 @@ UdpMultiswitch.prototype = {
         }, function (msg, rinfo) {
             msg = that._parseResponseBuffer(msg);
             that.log.info('getPowerState success: ', msg[7]);
+            that.currentActiveStatus = msg[7];
             callback(null, msg[7]);
         });
     },
 
-    setPowerState: function(targetService, powerState, callback, context) {  
+    setPowerState: function(targetService, powerState, callback, context) { 
+        var that = this;
         var payload = '6D6F62696C65'+'03'+'00'+'0D0A';
-   
-        this.udpRequest(this.host, this.port, payload, function(error) {
-            if (error) {
-                this.log.error('setPowerState failed: ' + error.message);            
-                callback(error);
-            } else {
-                this.log.info('setPowerState ' + powerState);
-            }
+
+        if(powerState == that.currentActiveStatus){//workaround, blauberg can't on/off device, only toggle  
             callback();
-        }.bind(this));
+        }else{
+            this.udpRequest(this.host, this.port, payload, function(error) {
+                if (error) {
+                    this.log.error('setPowerState failed: ' + error.message);            
+                    callback(error);
+                } else {
+                    that.currentActiveStatus = powerState;
+                    this.log.info('setPowerState ' + powerState);
+                }
+                callback();
+            }.bind(this));
+        }
     },
 
     getServices: function () {

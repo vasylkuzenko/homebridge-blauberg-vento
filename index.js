@@ -72,7 +72,7 @@ UdpMultiswitch.prototype = {
             }
         }, function (msg, rinfo) {
             msg = that._parseResponseBuffer(msg);
-            that.currentActiveStatus = msg[31];
+            that.currentActiveStatus = msg[7];
 
             that.log.info('getFilterStatus success: ', msg[31]);
             callback(null, msg[31]);
@@ -178,6 +178,10 @@ UdpMultiswitch.prototype = {
         fanService
             .getCharacteristic(Characteristic.FilterChangeIndication)
             .on('get', this.getFilterStatus.bind(this, fanService))
+        ;
+        fanService
+            .setCharacteristic(Characteristic.CurrentFanState, 1)
+            //.on('set', this.getFilterStatus.bind(this, fanService), 1)
         ;
 
         this.services.push(fanService);

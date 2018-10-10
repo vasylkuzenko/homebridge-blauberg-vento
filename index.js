@@ -152,6 +152,47 @@ UdpMultiswitch.prototype = {
         }
     },
 
+    getFanState: function (targetService, callback, context) {
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getFanState failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+            that.currentActiveStatus = msg[7];
+
+            that.log.info('getFanState success: ', msg[23]);
+            
+            callback(null,  msg[23]);
+        });
+    },
+
+    setFanState: function(targetService, fanState, callback, context) { 
+        var that = this;
+
+        if(1 == fanState){
+            var comand = '01';
+        }else if(0 == fanState){
+            var comand = '00';
+        }
+
+        var payload = '6D6F62696C65'+'06'+comand+'0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function(error) {
+            if (error) {
+                this.log.error('setFanState failed: ' + error.message);            
+                callback(error);
+            } else {
+                this.log.info('setFanState ' + fanState);
+            }
+            callback();
+        }.bind(this));
+        
+    },
+
     getServices: function () {
         this.services = [];
 
@@ -180,13 +221,12 @@ UdpMultiswitch.prototype = {
             .on('get', this.getFilterStatus.bind(this, fanService))
         ;
         fanService
-            .setCharacteristic(Characteristic.CurrentFanState, 1)
-            //.on('set', this.getFilterStatus.bind(this, fanService), 1)
+            .getCharacteristic(Characteristic.TargetFanState)
+            .on('get', this.getFanState.bind(this, fanService))
+            .on('set', this.setFanState.bind(this, fanService))
         ;
 
         this.services.push(fanService);
-
-
      
         
         return this.services;

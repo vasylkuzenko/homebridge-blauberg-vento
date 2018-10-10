@@ -72,7 +72,6 @@ UdpMultiswitch.prototype = {
             }
         }, function (msg, rinfo) {
             msg = that._parseResponseBuffer(msg);
-            that.currentActiveStatus = msg[7];
 
             that.log.info('getFilterStatus success: ', msg[31]);
             callback(null, msg[31]);
@@ -90,7 +89,6 @@ UdpMultiswitch.prototype = {
             }
         }, function (msg, rinfo) {
             msg = that._parseResponseBuffer(msg);
-            that.currentActiveStatus = msg[7];
 
             var speed = msg[21];
             speed = Math.round(speed/255*100);
@@ -162,7 +160,6 @@ UdpMultiswitch.prototype = {
             }
         }, function (msg, rinfo) {
             msg = that._parseResponseBuffer(msg);
-            that.currentActiveStatus = msg[7];
 
             that.log.info('getFanState success: ', msg[23]);
             
@@ -205,7 +202,7 @@ UdpMultiswitch.prototype = {
         this.services.push(informationService);
 
 
-        var fanService = new Service.Fanv2(this.name);
+        var fanService = new Service.Fan(this.name);
         fanService
             .getCharacteristic(Characteristic.Active)
             .on('get', this.getPowerState.bind(this, fanService))
@@ -221,10 +218,11 @@ UdpMultiswitch.prototype = {
             .on('get', this.getFilterStatus.bind(this, fanService))
         ;
         fanService
-            .getCharacteristic(Characteristic.TargetFanState)
+            .getCharacteristic(Characteristic.SwingMode)
             .on('get', this.getFanState.bind(this, fanService))
             .on('set', this.setFanState.bind(this, fanService))
         ;
+    
 
         this.services.push(fanService);
      

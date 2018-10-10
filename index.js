@@ -2,7 +2,10 @@
 
 var Service;
 var Characteristic;
-var udp = require('./udp');
+
+var broadcast = '000000000000000009000000e00729070b00170a00000000c0a80a0555c100008ec20000000006000000000000000000';
+var dgram = require('dgram');
+
 
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
@@ -25,67 +28,102 @@ function UdpMultiswitch(log, config) {
 
 UdpMultiswitch.prototype = {
 
-    udpRequest: function(host, port, payload, callback) {
-        udp(host, port, payload, function (err) {
-            this.log('udp err msg',err);
-            callback(err);
+    udpRequest: function(host, port, payloadMessage, callback, callbackResponse) {
+        if(!callback){callback = function(){};}
+        if(!callbackResponse){callbackResponse = function(){};}
+
+        var client = dgram.createSocket('udp4');
+        var delayTime = Math.floor(Math.random() * 1500) + 1;
+        var message = new Buffer(payloadMessage, 'hex');
+
+        setTimeout(function() { 
+            client.send(broadcast, 0, broadcast.length, port, host, function(err, bytes) {
+                if (err) throw err;
+
+                client.send(message, 0, message.length, port, host, function(err, bytes) {
+                    if (err) throw err;
+                    
+                    console.log('UDP message sent to ' + host +':'+ port, message);
+
+                    client.on('message', function(msg, rinfo){
+                        console.log('UDP message get', msg);
+                        callbackResponse(msg, rinfo);
+                    client.close();
+                    });
+            
+                    callback(err);
+                });
+                
+            });
+        }, delayTime);
+    },
+
+    _parseResponseBuffer: function(data){
+        return JSON.parse(JSON.stringify(data)).data;
+    },
+
+    getCustomSpeed: function (targetService, callback, context) {
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getCustomSpeed failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            var speed = msg[21];
+            speed = Math.round(speed/255*100);
+
+            that.log.info('getCustomSpeed success: ', speed);
+            callback(null, speed);
         });
     },
 
-    setPowerState: function(targetService, powerState, callback, context) {
-        var funcContext = 'fromSetPowerState';
-        var payload;
-
-        // Callback safety
-        if (context == funcContext) {
-            if (callback) {
-                callback();
-            }
-
-            return;
-        }
-
-
-        payload  = powerState ? this.onPayload  : this.offPayload;
-               
+    setCustomSpeed: function(targetService, speed, callback, context) {      
+        var payload = '6D6F62696C65'+'05'+(Math.round(255/100*speed).toString(16))+'0D0A'
 
         this.udpRequest(this.host, this.port, payload, function(error) {
             if (error) {
-                this.log.error('setPowerState failed: ' + error.message);
+                this.log.error('setCustomSpeed failed: ' + error.message);
                 this.log('response: ' + response + '\nbody: ' + responseBody);
             
                 callback(error);
             } else {
-                this.log.info('==> ' + (powerState ? "On" : "Off"));
+                this.log.info('set speed ' + speed);
             }
             callback();
         }.bind(this));
     },
-    
-    getFilterStatus: function(targetService, powerState, callback, context) {
-        var funcContext = 'fromSetPowerState';
-        var payload;
 
-        // Callback safety
+    getPowerState: function (targetService, callback, context) {
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
 
-        
-     
-        this.udpRequest(this.host, this.port, '6D6F62696C6504030D0A', function(error) {
-            if (error) {
-                this.log.error('setPowerState failed: ' + error.message);
-                this.log('response: ' + response + '\nbody: ' + responseBody);
-            
-                callback(error);
-            } else {
-                this.log.info('==> ' + (powerState ? "On" : "Off"));
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getPowerState failed: ' + error.message);
             }
-            callback(null , 1);
-        }.bind(this));
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+            that.log.info('getPowerState success: ', msg[7]);
+            callback(null, msg[7]);
+        });
     },
 
-    identify: function (callback) {
-        this.log('Identify me Senpai!');
-        callback();
+    setPowerState: function(targetService, powerState, callback, context) {  
+        var payload = '6D6F62696C65'+'03'+'00'+'0D0A';
+   
+        this.udpRequest(this.host, this.port, payload, function(error) {
+            if (error) {
+                this.log.error('setPowerState failed: ' + error.message);            
+                callback(error);
+            } else {
+                this.log.info('setPowerState ' + powerState);
+            }
+            callback();
+        }.bind(this));
     },
 
     getServices: function () {
@@ -97,21 +135,30 @@ UdpMultiswitch.prototype = {
             .setCharacteristic(Characteristic.Model, 'Vento Expert');
         this.services.push(informationService);
 
-        var filterService =  new Service.FilterMaintenance(this.name);
-        filterService
-            .getCharacteristic(Characteristic.FilterChangeIndication)
-            .on('get', this.getFilterStatus.bind(this, filterService))
-        ;
-        this.services.push(filterService);
 
-        var switchService = new Service.Switch(this.name);
-        switchService
-            .getCharacteristic(Characteristic.On)//Characteristic.CurrentAirPurifierState
-           // .on('get', this.setPowerState.bind(this, switchService))
-            .on('set', this.setPowerState.bind(this, switchService))
+        var fanService = new Service.Fanv2(this.name);
+        fanService
+            .getCharacteristic(Characteristic.Active)
+            .on('get', this.getPowerState.bind(this, fanService))
+            .on('set', this.setPowerState.bind(this, fanService))
         ;
+        fanService
+            .getCharacteristic(Characteristic.RotationSpeed)
+            .on('get', this.getCustomSpeed.bind(this, fanService))
+            .on('set', this.setCustomSpeed.bind(this, fanService))
+        ;
+        // fanService
+        //     .setCharacteristic(Characteristic.SwingMode, 1)
+        //    // .on('get', this.setPowerState.bind(this, switchService))
+        //   //  .on('set', this.setCustomSpeed.bind(this, fanService))
+        // ;
+        // fanService
+        //     .setCharacteristic(Characteristic.RotationDirection, 1)
+        //    // .on('get', this.setPowerState.bind(this, switchService))
+        //   //  .on('set', this.setCustomSpeed.bind(this, fanService))
+        // ;
 
-        this.services.push(switchService);
+        this.services.push(fanService);
 
      
         

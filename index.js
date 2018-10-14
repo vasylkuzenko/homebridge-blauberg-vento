@@ -49,10 +49,10 @@ UdpMultiswitch.prototype = {
                 client.send(message, 0, message.length, port, host, function(err, bytes) {
                     if (err) throw err;
                     
-                    console.log('UDP message sent to ' + host +':'+ port, message);
+                  //  console.log('UDP message sent to ' + host +':'+ port, message);
 
                     client.on('message', function(msg, rinfo){
-                        console.log('UDP message get', msg);
+                      //  console.log('UDP message get', msg);
                         callbackResponse(msg, rinfo);
                         client.close();
                     });

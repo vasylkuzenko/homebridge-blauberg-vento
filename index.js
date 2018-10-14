@@ -2,6 +2,7 @@
 
 var Service;
 var Characteristic;
+var UUIDGen;
 
 var broadcast = '000000000000000009000000e00729070b00170a00000000c0a80a0555c100008ec20000000006000000000000000000';
 var dgram = require('dgram');
@@ -17,6 +18,7 @@ var dgram = require('dgram');
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
+    UUIDGen = homebridge.hap.uuid;
     homebridge.registerAccessory('homebridge-blauberg-vento', 'BlaubergVento', UdpMultiswitch);
 };
 
@@ -30,6 +32,8 @@ function UdpMultiswitch(log, config) {
 
 
     this.currentActiveStatus  = null;
+
+
 }
 
 UdpMultiswitch.prototype = {
@@ -49,10 +53,10 @@ UdpMultiswitch.prototype = {
                 client.send(message, 0, message.length, port, host, function(err, bytes) {
                     if (err) throw err;
                     
-                  //  console.log('UDP message sent to ' + host +':'+ port, message);
+                 //   console.log('UDP message sent to ' + host +':'+ port, message);
 
                     client.on('message', function(msg, rinfo){
-                      //  console.log('UDP message get', msg);
+                     //   console.log('UDP message get', msg);
                         callbackResponse(msg, rinfo);
                         client.close();
                     });
@@ -122,6 +126,7 @@ UdpMultiswitch.prototype = {
     },
 
     getPowerState: function (targetService, callback, context) {
+        this.log('try get power state');
         var that = this;
         var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
 
@@ -155,6 +160,23 @@ UdpMultiswitch.prototype = {
                 callback();
             }.bind(this));
         }
+    },
+
+    getHumidity: function(targetService, callback, context){
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getHumidity failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            that.log.info('getHumidity success: ', msg[25]);
+            
+            callback(null,  msg[25]);
+        });
     },
 
     getFanState: function (targetService, callback, context) {
@@ -197,6 +219,11 @@ UdpMultiswitch.prototype = {
         
     },
 
+    identify: function (callback) {
+        this.log.debug('[%s] identify', this.displayName);
+        callback();
+    },
+
     getServices: function () {
         this.services = [];
 
@@ -228,6 +255,10 @@ UdpMultiswitch.prototype = {
             .getCharacteristic(Characteristic.SwingMode)
             .on('get', this.getFanState.bind(this, fanService))
             .on('set', this.setFanState.bind(this, fanService))
+        ;
+        fanService
+            .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+            .on('get', this.getHumidity.bind(this, fanService))
         ;
     
 

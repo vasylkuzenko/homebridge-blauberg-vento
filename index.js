@@ -36,6 +36,8 @@ function UdpMultiswitch(log, config) {
     this.port            = config.port || 4000;
     this.serialNumber    = config.serialNumber || '';
 
+    this.deviceInfoCache = [];
+
 
     this.currentActiveStatus  = null;
 
@@ -43,6 +45,32 @@ function UdpMultiswitch(log, config) {
 }
 
 UdpMultiswitch.prototype = {
+
+    getDeviceInfo: function(callback){
+        if(this.deviceInfoCache && (this.deviceInfoLastUpdate - Date.now() <= 10000)){
+            callback(this.deviceInfoCache);
+        }else{
+            var that = this;
+            var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+            that.log.info('try getDeviceInfo');
+
+            this.udpRequest(this.host, this.port, payload, function (error) {
+                if(error) {
+                    that.log.error('getDeviceInfo failed: ' + error.message);
+                }
+            }, function (msg, rinfo) {
+                msg = that._parseResponseBuffer(msg);
+
+                this.deviceInfoLastUpdate = Date.now();
+
+                this.deviceInfoCache = msg;
+    
+                that.log.info('getDeviceInfo success');
+                callback(msg);
+            }.bind(this));
+        }
+    },
 
     udpRequest: function(host, port, payloadMessage, callback, callbackResponse) {
         if(!callback){callback = function(){};}
@@ -79,38 +107,17 @@ UdpMultiswitch.prototype = {
         return JSON.parse(JSON.stringify(data)).data;
     },
 
-    getFilterStatus: function (targetService, callback, context) {
-        var that = this;
-        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-
-        this.udpRequest(this.host, this.port, payload, function (error) {
-            if(error) {
-                that.log.error('getFilterStatus failed: ' + error.message);
-            }
-        }, function (msg, rinfo) {
-            msg = that._parseResponseBuffer(msg);
-
-            that.log.info('getFilterStatus success: ', msg[31]);
+    getFilterStatus: function (targetService, callback, context){
+        this.getDeviceInfo(function(msg){
             callback(null, msg[31]);
         });
     },
 
 
     getCustomSpeed: function (targetService, callback, context) {
-        var that = this;
-        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-
-        this.udpRequest(this.host, this.port, payload, function (error) {
-            if(error) {
-                that.log.error('getCustomSpeed failed: ' + error.message);
-            }
-        }, function (msg, rinfo) {
-            msg = that._parseResponseBuffer(msg);
-
+        this.getDeviceInfo(function(msg){
             var speed = msg[21];
             speed = Math.round(speed/255*100);
-
-            that.log.info('getCustomSpeed success: ', speed);
             callback(null, speed);
         });
     },
@@ -128,22 +135,19 @@ UdpMultiswitch.prototype = {
                 this.log.info('set speed ' + speed);
             }
             callback();
+        }.bind(this), function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            this.deviceInfoLastUpdate = Date.now();
+
+            this.deviceInfoCache = msg;
+
+            that.log.info('getDeviceInfo success');
         }.bind(this));
     },
 
     getPowerState: function (targetService, callback, context) {
-        this.log('try get power state');
-        var that = this;
-        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-
-        this.udpRequest(this.host, this.port, payload, function (error) {
-            if(error) {
-                that.log.error('getPowerState failed: ' + error.message);
-            }
-        }, function (msg, rinfo) {
-            msg = that._parseResponseBuffer(msg);
-            that.log.info('getPowerState success: ', msg[7]);
-            that.currentActiveStatus = msg[7];
+        this.getDeviceInfo(function(msg){
             callback(null, msg[7]);
         });
     },
@@ -152,7 +156,7 @@ UdpMultiswitch.prototype = {
         var that = this;
         var payload = '6D6F62696C65'+'03'+'00'+'0D0A';
 
-        if(powerState == that.currentActiveStatus){//workaround, blauberg can't on/off device, only toggle  
+        if(powerState == that.deviceInfoCache[7]){//workaround, blauberg can't on/off device, only toggle  
             callback();
         }else{
             this.udpRequest(this.host, this.port, payload, function(error) {
@@ -160,45 +164,30 @@ UdpMultiswitch.prototype = {
                     this.log.error('setPowerState failed: ' + error.message);            
                     callback(error);
                 } else {
-                    that.currentActiveStatus = powerState;
                     this.log.info('setPowerState ' + powerState);
                 }
                 callback();
+            }.bind(this), function (msg, rinfo) {
+                msg = that._parseResponseBuffer(msg);
+    
+                this.deviceInfoLastUpdate = Date.now();
+    
+                this.deviceInfoCache = msg;
+    
+                that.log.info('getDeviceInfo success');
             }.bind(this));
         }
     },
 
     getHumidity: function(targetService, callback, context){
-        var that = this;
-        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-
-        this.udpRequest(this.host, this.port, payload, function (error) {
-            if(error) {
-                that.log.error('getHumidity failed: ' + error.message);
-            }
-        }, function (msg, rinfo) {
-            msg = that._parseResponseBuffer(msg);
-
-            that.log.info('getHumidity success: ', msg[25]);
-            
-            callback(null,  msg[25]);
+        this.getDeviceInfo(function(msg){
+            callback(null, msg[25]);
         });
     },
 
     getFanState: function (targetService, callback, context) {
-        var that = this;
-        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-
-        this.udpRequest(this.host, this.port, payload, function (error) {
-            if(error) {
-                that.log.error('getFanState failed: ' + error.message);
-            }
-        }, function (msg, rinfo) {
-            msg = that._parseResponseBuffer(msg);
-
-            that.log.info('getFanState success: ', msg[23]);
-            
-            callback(null,  msg[23]);
+        this.getDeviceInfo(function(msg){
+            callback(null, msg[23]);
         });
     },
 
@@ -221,6 +210,14 @@ UdpMultiswitch.prototype = {
                 this.log.info('setFanState ' + fanState);
             }
             callback();
+        }.bind(this), function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            this.deviceInfoLastUpdate = Date.now();
+
+            this.deviceInfoCache = msg;
+
+            that.log.info('getDeviceInfo success');
         }.bind(this));
         
     },
@@ -267,7 +264,6 @@ UdpMultiswitch.prototype = {
             .on('get', this.getHumidity.bind(this, fanService))
         ;
     
-
         this.services.push(fanService);
      
         

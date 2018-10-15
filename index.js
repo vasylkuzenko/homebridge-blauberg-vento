@@ -13,13 +13,19 @@ var dgram = require('dgram');
 //     "name": "Vento Bedroom",
 //     "host": "10.0.0.00",
 //     "serialNumber": "000100101234430F"
-// }
+// },
+// {
+//     "accessory": "BlaubergVentoHumidity",
+//     "name": "Vento Bedroom Humidity Sensor",
+//     "host": "10.0.0.00"
+// },
 
 module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
     UUIDGen = homebridge.hap.uuid;
     homebridge.registerAccessory('homebridge-blauberg-vento', 'BlaubergVento', UdpMultiswitch);
+    homebridge.registerAccessory('homebridge-blauberg-vento-humidity', 'BlaubergVentoHumidity', BlaubergVentoHumidity);
 };
 
 function UdpMultiswitch(log, config) {
@@ -264,6 +270,100 @@ UdpMultiswitch.prototype = {
 
         this.services.push(fanService);
      
+        
+        return this.services;
+    }
+};
+
+function BlaubergVentoHumidity(log, config) {
+    this.log = log;
+
+    this.name            = config.name || 'Blauberg VentoHumidity';
+    this.host            = config.host;
+    this.port            = config.port || 4000;
+    this.serialNumber    = config.serialNumber || '';
+
+}
+
+BlaubergVentoHumidity.prototype = {
+
+    udpRequest: function(host, port, payloadMessage, callback, callbackResponse) {
+        if(!callback){callback = function(){};}
+        if(!callbackResponse){callbackResponse = function(){};}
+
+        var client = dgram.createSocket('udp4');
+        var delayTime = Math.floor(Math.random() * 1500) + 1;
+        var message = new Buffer(payloadMessage, 'hex');
+
+        setTimeout(function() { 
+            client.send(broadcast, 0, broadcast.length, port, host, function(err, bytes) {
+                if (err) throw err;
+
+                client.send(message, 0, message.length, port, host, function(err, bytes) {
+                    if (err) throw err;
+                    
+                 //   console.log('UDP message sent to ' + host +':'+ port, message);
+
+                    client.on('message', function(msg, rinfo){
+                     //   console.log('UDP message get', msg);
+                        callbackResponse(msg, rinfo);
+                        client.close();
+                    });
+            
+                    callback(err);
+                });
+                
+            });
+        }, delayTime);
+
+    },
+
+    _parseResponseBuffer: function(data){
+        return JSON.parse(JSON.stringify(data)).data;
+    },
+
+    
+
+    getHumidity: function(targetService, callback, context){
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getHumidity failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            that.log.info('getHumidity success: ', msg[25]);
+            
+            callback(null,  msg[25]);
+        });
+    },
+
+    identify: function (callback) {
+        this.log.debug('[%s] identify', this.displayName);
+        callback();
+    },
+
+    getServices: function () {
+        this.services = [];
+
+        var informationService = new Service.AccessoryInformation();
+        informationService
+            .setCharacteristic(Characteristic.Manufacturer, 'Blauberg')
+            .setCharacteristic(Characteristic.Model, 'Vento Expert')
+        ;
+        this.services.push(informationService);
+
+
+        var fanService = new Service.HumiditySensor(this.name);
+        fanService
+            .getCharacteristic(Characteristic.CurrentRelativeHumidity)
+            .on('get', this.getHumidity.bind(this, fanService))
+        ;
+
+        this.services.push(fanService);
         
         return this.services;
     }

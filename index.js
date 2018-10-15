@@ -39,36 +39,64 @@ function UdpMultiswitch(log, config) {
     this.deviceInfoCache = [];
 
 
-    this.currentActiveStatus  = null;
-
-
 }
 
 UdpMultiswitch.prototype = {
 
     getDeviceInfo: function(callback){
-        if(this.deviceInfoCache && (this.deviceInfoLastUpdate - Date.now() <= 10000)){
-            callback(this.deviceInfoCache);
+        if(this.deviceInfoCallInProgress){
+            this.needUpdateInfoInHomeKit = true;
+            this.log.info('getDeviceInfo inprogress');
         }else{
-            var that = this;
-            var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-
-            that.log.info('try getDeviceInfo');
-
-            this.udpRequest(this.host, this.port, payload, function (error) {
-                if(error) {
-                    that.log.error('getDeviceInfo failed: ' + error.message);
-                }
-            }, function (msg, rinfo) {
-                msg = that._parseResponseBuffer(msg);
-
-                this.deviceInfoLastUpdate = Date.now();
-
-                this.deviceInfoCache = msg;
+            if(this.deviceInfoCache && (this.deviceInfoLastUpdate - Date.now() <= 10000)){
+                callback(this.deviceInfoCache);
+            }else{
+                var that = this;
+                var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
     
-                that.log.info('getDeviceInfo success');
-                callback(msg);
-            }.bind(this));
+                that.log.info('try getDeviceInfo');
+
+                this.deviceInfoCallInProgress = true;
+    
+                this.udpRequest(this.host, this.port, payload, function (error) {
+                    this.deviceInfoCallInProgress = false;
+                    if(error) {
+                        that.log.error('getDeviceInfo failed: ' + error.message);
+                    }
+                }.bind(this), function (msg, rinfo) {
+                    this.deviceInfoCallInProgress = false;
+
+                    msg = that._parseResponseBuffer(msg);
+    
+                    this.deviceInfoLastUpdate = Date.now();
+    
+                    this.deviceInfoCache = msg;
+
+                   
+                    
+        
+                    that.log.info('getDeviceInfo success');
+                    callback(msg);
+
+                    if(this.needUpdateInfoInHomeKit){
+                        this.needUpdateInfoInHomeKit = false;
+                        this.updateAllCharacteristic(msg);
+                    }
+                }.bind(this));
+            }
+        }
+    },
+
+    updateAllCharacteristic: function(msg){
+        var speed = msg[21];
+        speed = Math.round(speed/255*100);
+
+        if(this.fanService){
+            this.fanService.setCharacteristic(Characteristic.Active, msg[7]);
+            this.fanService.setCharacteristic(Characteristic.RotationSpeed, speed);
+            this.fanService.setCharacteristic(Characteristic.FilterChangeIndication, msg[31]);
+            this.fanService.setCharacteristic(Characteristic.SwingMode, msg[23]);
+            this.fanService.setCharacteristic(Characteristic.CurrentRelativeHumidity, msg[25]);
         }
     },
 
@@ -239,32 +267,32 @@ UdpMultiswitch.prototype = {
         this.services.push(informationService);
 
 
-        var fanService = new Service.Fanv2(this.name);
-        fanService
+        this.fanService = new Service.Fanv2(this.name);
+        this.fanService
             .getCharacteristic(Characteristic.Active)
-            .on('get', this.getPowerState.bind(this, fanService))
-            .on('set', this.setPowerState.bind(this, fanService))
+            .on('get', this.getPowerState.bind(this, this.fanService))
+            .on('set', this.setPowerState.bind(this, this.fanService))
         ;
-        fanService
+        this.fanService
             .getCharacteristic(Characteristic.RotationSpeed)
-            .on('get', this.getCustomSpeed.bind(this, fanService))
-            .on('set', this.setCustomSpeed.bind(this, fanService))
+            .on('get', this.getCustomSpeed.bind(this, this.fanService))
+            .on('set', this.setCustomSpeed.bind(this, this.fanService))
         ;
-        fanService
+        this.fanService
             .getCharacteristic(Characteristic.FilterChangeIndication)
-            .on('get', this.getFilterStatus.bind(this, fanService))
+            .on('get', this.getFilterStatus.bind(this, this.fanService))
         ;
-        fanService
+        this.fanService
             .getCharacteristic(Characteristic.SwingMode)
-            .on('get', this.getFanState.bind(this, fanService))
-            .on('set', this.setFanState.bind(this, fanService))
+            .on('get', this.getFanState.bind(this, this.fanService))
+            .on('set', this.setFanState.bind(this, this.fanService))
         ;
-        fanService
+        this.fanService
             .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-            .on('get', this.getHumidity.bind(this, fanService))
+            .on('get', this.getHumidity.bind(this, this.fanService))
         ;
     
-        this.services.push(fanService);
+        this.services.push( this.fanService);
      
         
         return this.services;

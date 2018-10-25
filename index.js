@@ -34,61 +34,14 @@ function UdpMultiswitch(log, config) {
     this.name            = config.name || 'Blauberg Vento';
     this.host            = config.host;
     this.port            = config.port || 4000;
-    this.updateInterval  = config.updateInterval || 15000;
     this.serialNumber    = config.serialNumber || '';
 
-    this.deviceInfoCache = [];
+
 
 
 }
 
 UdpMultiswitch.prototype = {
-    updateDeviceInfo: function(){
-        var that = this;
-        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-
-        that.log.info('try updateDeviceInfo');
-
-        this.deviceInfoCallInProgress = true;
-
-        this.udpRequest(this.host, this.port, payload, function (error) {
-            this.deviceInfoCallInProgress = false;
-            if(error) {
-                that.log.error('updateDeviceInfo failed: ' + error.message);
-            }
-        }.bind(this), function (msg, rinfo) {
-            this.deviceInfoCallInProgress = false;
-
-            msg = that._parseResponseBuffer(msg);
-
-            this.deviceInfoLastUpdate = Date.now();
-
-            this.deviceInfoCache = msg;
-
-
-            that.log.info('updateDeviceInfo success');
-       
-        }.bind(this));
-    },
-
-    getDeviceInfo: function(callback){
-        if(this.deviceInfoCache){
-            callback(this.deviceInfoCache);
-        }
-    },
-
-    updateAllCharacteristic: function(msg){
-        var speed = msg[21];
-        speed = Math.round(speed/255*100);
-
-        if(this.fanService){
-            this.fanService.getCharacteristic(Characteristic.Active).updateValue(msg[7]);
-            this.fanService.getCharacteristic(Characteristic.RotationSpeed).updateValue(speed);
-            this.fanService.getCharacteristic(Characteristic.FilterChangeIndication).updateValue(msg[31]);
-            this.fanService.getCharacteristic(Characteristic.SwingMode).updateValue(msg[23]);
-            this.fanService.getCharacteristic(Characteristic.CurrentRelativeHumidity).updateValue(msg[25]);
-        }
-    },
 
     udpRequest: function(host, port, payloadMessage, callback, callbackResponse) {
         if(!callback){callback = function(){};}
@@ -99,18 +52,24 @@ UdpMultiswitch.prototype = {
         var message = new Buffer(payloadMessage, 'hex');
 
         setTimeout(function() { 
+            // client.send(broadcast, 0, broadcast.length, port, host, function(err, bytes) {
+            //     if (err) throw err;
 
-            client.send(message, 0, message.length, port, host, function(err, bytes) {
-                if(err){callback(err);}
+                client.send(message, 0, message.length, port, host, function(err, bytes) {
+                    if (err) throw err;
+                    
+                 //   console.log('UDP message sent to ' + host +':'+ port, message);
 
-                client.on('message', function(msg, rinfo){
-                    callbackResponse(msg, rinfo);
-                    client.close();
+                    client.on('message', function(msg, rinfo){
+                     //   console.log('UDP message get', msg);
+                        callbackResponse(msg, rinfo);
+                        client.close();
+                    });
+            
+                    callback(err);
                 });
-        
-                callback(err);
-            });
                 
+         //   });
         }, delayTime);
 
     },
@@ -119,17 +78,38 @@ UdpMultiswitch.prototype = {
         return JSON.parse(JSON.stringify(data)).data;
     },
 
-    getFilterStatus: function (targetService, callback, context){
-        this.getDeviceInfo(function(msg){
+    getFilterStatus: function (targetService, callback, context) {
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getFilterStatus failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            that.log.info('getFilterStatus success: ', msg[31]);
             callback(null, msg[31]);
         });
     },
 
 
     getCustomSpeed: function (targetService, callback, context) {
-        this.getDeviceInfo(function(msg){
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getCustomSpeed failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
             var speed = msg[21];
             speed = Math.round(speed/255*100);
+
+            that.log.info('getCustomSpeed success: ', speed);
             callback(null, speed);
         });
     },
@@ -151,40 +131,76 @@ UdpMultiswitch.prototype = {
     },
 
     getPowerState: function (targetService, callback, context) {
-        this.getDeviceInfo(function(msg){
+        this.log('try get power state');
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getPowerState failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+            that.log.info('getPowerState success: ', msg[7]);
             callback(null, msg[7]);
         });
     },
 
     setPowerState: function(targetService, powerState, callback, context) { 
         var that = this;
-        var payload = '6D6F62696C65'+'03'+'00'+'0D0A';
+       
 
-        if(powerState == that.deviceInfoCache[7]){//workaround, blauberg can't on/off device, only toggle  
-            callback();
-        }else{
-            this.udpRequest(this.host, this.port, payload, function(error) {
-                if (error) {
-                    this.log.error('setPowerState failed: ' + error.message);            
-                    callback(error);
-                } else {
-                    deviceInfoCache[7] = powerState;
-                    this.log.info('setPowerState ' + powerState);
-                }
+        that.getPowerState(null, function(var1, currentActiveStatus){//blauberg can't on/off device, only toggle
+            if(powerState == currentActiveStatus){
+                that.log.info('not need setPowerState ' + powerState);
                 callback();
-            }.bind(this));
-        }
+            }else{
+                var payload = '6D6F62696C65'+'03'+'00'+'0D0A';
+
+                that.udpRequest(that.host, that.port, payload, function(error){
+                    if (error) {
+                        that.log.error('setPowerState failed: ' + error.message);            
+                        callback(error);
+                    } else {
+                        that.log.info('setPowerState ' + powerState);
+                    }
+                    callback();
+                });
+            }
+        });
     },
 
     getHumidity: function(targetService, callback, context){
-        this.getDeviceInfo(function(msg){
-            callback(null, msg[25]);
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getHumidity failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            that.log.info('getHumidity success: ', msg[25]);
+            
+            callback(null,  msg[25]);
         });
     },
 
     getFanState: function (targetService, callback, context) {
-        this.getDeviceInfo(function(msg){
-            callback(null, msg[23]);
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getFanState failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            that.log.info('getFanState success: ', msg[23]);
+            
+            callback(null,  msg[23]);
         });
     },
 
@@ -217,7 +233,6 @@ UdpMultiswitch.prototype = {
     },
 
     getServices: function () {
-        var that = this;
         this.services = [];
 
         var informationService = new Service.AccessoryInformation();
@@ -229,37 +244,34 @@ UdpMultiswitch.prototype = {
         this.services.push(informationService);
 
 
-        this.fanService = new Service.Fanv2(this.name);
-        this.fanService
+        var fanService = new Service.Fanv2(this.name);
+        fanService
             .getCharacteristic(Characteristic.Active)
-            .on('get', this.getPowerState.bind(this, this.fanService))
-            .on('set', this.setPowerState.bind(this, this.fanService))
+            .on('get', this.getPowerState.bind(this, fanService))
+            .on('set', this.setPowerState.bind(this, fanService))
         ;
-        this.fanService
+        fanService
             .getCharacteristic(Characteristic.RotationSpeed)
-            .on('get', this.getCustomSpeed.bind(this, this.fanService))
-            .on('set', this.setCustomSpeed.bind(this, this.fanService))
+            .on('get', this.getCustomSpeed.bind(this, fanService))
+            .on('set', this.setCustomSpeed.bind(this, fanService))
         ;
-        this.fanService
+        fanService
             .getCharacteristic(Characteristic.FilterChangeIndication)
-            .on('get', this.getFilterStatus.bind(this, this.fanService))
+            .on('get', this.getFilterStatus.bind(this, fanService))
         ;
-        this.fanService
+        fanService
             .getCharacteristic(Characteristic.SwingMode)
-            .on('get', this.getFanState.bind(this, this.fanService))
-            .on('set', this.setFanState.bind(this, this.fanService))
+            .on('get', this.getFanState.bind(this, fanService))
+            .on('set', this.setFanState.bind(this, fanService))
         ;
-        this.fanService
+        fanService
             .getCharacteristic(Characteristic.CurrentRelativeHumidity)
-            .on('get', this.getHumidity.bind(this, this.fanService))
+            .on('get', this.getHumidity.bind(this, fanService))
         ;
     
-        this.services.push(this.fanService);
 
-        that.updateDeviceInfo();
-        that.updateInterval = setInterval(function(){
-            that.updateDeviceInfo();
-        }, that.updateInterval);
+        this.services.push(fanService);
+     
         
         return this.services;
     }
@@ -271,58 +283,11 @@ function BlaubergVentoHumidity(log, config) {
     this.name            = config.name || 'Blauberg VentoHumidity';
     this.host            = config.host;
     this.port            = config.port || 4000;
-    this.updateInterval  = config.updateInterval || 15000;
     this.serialNumber    = config.serialNumber || '';
 
 }
 
 BlaubergVentoHumidity.prototype = {
-    updateDeviceInfo: function(){
-        var that = this;
-        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-
-        that.log.info('try updateDeviceInfo');
-
-        this.deviceInfoCallInProgress = true;
-
-        this.udpRequest(this.host, this.port, payload, function (error) {
-            this.deviceInfoCallInProgress = false;
-            if(error) {
-                that.log.error('updateDeviceInfo failed: ' + error.message);
-            }
-        }.bind(this), function (msg, rinfo) {
-            this.deviceInfoCallInProgress = false;
-
-            msg = that._parseResponseBuffer(msg);
-
-            this.deviceInfoLastUpdate = Date.now();
-
-            this.deviceInfoCache = msg;
-
-
-            that.log.info('updateDeviceInfo success');
-       
-        }.bind(this));
-    },
-
-    getDeviceInfo: function(callback){
-        if(this.deviceInfoCache){
-            callback(this.deviceInfoCache);
-        }
-    },
-
-    updateAllCharacteristic: function(msg){
-        var speed = msg[21];
-        speed = Math.round(speed/255*100);
-
-        if(this.fanService){
-            this.fanService.getCharacteristic(Characteristic.Active).updateValue(msg[7]);
-            this.fanService.getCharacteristic(Characteristic.RotationSpeed).updateValue(speed);
-            this.fanService.getCharacteristic(Characteristic.FilterChangeIndication).updateValue(msg[31]);
-            this.fanService.getCharacteristic(Characteristic.SwingMode).updateValue(msg[23]);
-            this.fanService.getCharacteristic(Characteristic.CurrentRelativeHumidity).updateValue(msg[25]);
-        }
-    },
 
     udpRequest: function(host, port, payloadMessage, callback, callbackResponse) {
         if(!callback){callback = function(){};}
@@ -333,18 +298,24 @@ BlaubergVentoHumidity.prototype = {
         var message = new Buffer(payloadMessage, 'hex');
 
         setTimeout(function() { 
+            // client.send(broadcast, 0, broadcast.length, port, host, function(err, bytes) {
+            //     if (err) throw err;
 
-            client.send(message, 0, message.length, port, host, function(err, bytes) {
-                if(err){callback(err);}
+                client.send(message, 0, message.length, port, host, function(err, bytes) {
+                    //if (err) throw err;
+                    
+                 //   console.log('UDP message sent to ' + host +':'+ port, message);
 
-                client.on('message', function(msg, rinfo){
-                    callbackResponse(msg, rinfo);
-                    client.close();
+                    client.on('message', function(msg, rinfo){
+                     //   console.log('UDP message get', msg);
+                        callbackResponse(msg, rinfo);
+                        client.close();
+                    });
+            
+                    callback(err);
                 });
-        
-                callback(err);
-            });
                 
+            // });
         }, delayTime);
 
     },
@@ -353,9 +324,22 @@ BlaubergVentoHumidity.prototype = {
         return JSON.parse(JSON.stringify(data)).data;
     },
 
+    
+
     getHumidity: function(targetService, callback, context){
-        this.getDeviceInfo(function(msg){
-            callback(null, msg[25]);
+        var that = this;
+        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
+
+        this.udpRequest(this.host, this.port, payload, function (error) {
+            if(error) {
+                that.log.error('getHumidity failed: ' + error.message);
+            }
+        }, function (msg, rinfo) {
+            msg = that._parseResponseBuffer(msg);
+
+            that.log.info('getHumidity success: ', msg[25]);
+            
+            callback(null,  msg[25]);
         });
     },
 
@@ -365,7 +349,6 @@ BlaubergVentoHumidity.prototype = {
     },
 
     getServices: function () {
-        var that = this;
         this.services = [];
 
         var informationService = new Service.AccessoryInformation();
@@ -383,11 +366,6 @@ BlaubergVentoHumidity.prototype = {
         ;
 
         this.services.push(fanService);
-
-        that.updateDeviceInfo();
-        that.updateInterval = setInterval(function(){
-            that.updateDeviceInfo();
-        }, that.updateInterval);
         
         return this.services;
     }

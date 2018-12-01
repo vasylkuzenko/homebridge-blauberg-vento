@@ -24,6 +24,8 @@ module.exports = function (homebridge) {
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
     UUIDGen = homebridge.hap.uuid;
+    FakeGatoHistoryService = require("fakegato-history")(homebridge);
+    homebridgeAPI = homebridge;
     homebridge.registerAccessory('homebridge-blauberg-vento', 'BlaubergVento', BlaubergVento);
     homebridge.registerAccessory('homebridge-blauberg-vento-humidity', 'BlaubergVentoHumidity', BlaubergVentoHumidity);
 };
@@ -36,6 +38,8 @@ function BlaubergVento(log, config) {
     this.port            = config.port || 4000;
     this.serialNumber    = config.serialNumber || '';
     this.updateTimeout   = config.updateTimeout || 30000;
+
+    this.fakeGatoHistoryService = this.getFakeGatoHistoryService();
 
 }
 
@@ -71,6 +75,8 @@ BlaubergVento.prototype = {
         }, delayTime);
 
     },
+
+ 
 
     _parseResponseBuffer: function(data){
         return JSON.parse(JSON.stringify(data)).data;
@@ -269,6 +275,8 @@ function BlaubergVentoHumidity(log, config) {
     this.port            = config.port || 4000;
     this.serialNumber    = config.serialNumber || '';
     this.updateTimeout   = config.updateTimeout || 30000;
+    this.isFakeGatoEnabled   = config.isFakeGatoEnabled || true;
+    this.fakeGatoStoragePath = config.fakeGatoStoragePath || false;
 
 }
 
@@ -325,14 +333,41 @@ BlaubergVentoHumidity.prototype = {
 
     },
 
+    addFakeGatoHistoryEntry(humidity) {
+        if (
+          !this.isFakeGatoEnabled 
+        ) {
+          return;
+        }
+        this.fakeGatoHistoryService.addEntry({
+          time: new Date().getTime() / 1000,
+          humidity: humidity
+        });
+      },
+
     getHumidity: function(targetService, callback, context){
         var that = this;
+        that.addFakeGatoHistoryEntry( that.statusCache[25]);
         callback(null,  that.statusCache[25]);
     },
 
     identify: function (callback) {
         this.log.debug('[%s] identify', this.displayName);
         callback();
+    },
+
+    getFakeGatoHistoryService() {
+        if (!this.isFakeGatoEnabled) {
+          return undefined;
+        }
+        const serialNumber = this.serialNumber ;
+        const filename = `fakegato-history_blauberg_${serialNumber}.json`;
+        const path = this.fakeGatoStoragePath || homebridgeAPI.user.storagePath();
+        return new FakeGatoHistoryService("room", this, {
+          filename,
+          path,
+          storage: "fs"
+        });
     },
 
     getServices: function (){

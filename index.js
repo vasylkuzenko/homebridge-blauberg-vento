@@ -39,9 +39,6 @@ function BlaubergVento(log, config) {
     this.port            = config.port || 4000;
     this.serialNumber    = config.serialNumber || '';
     this.updateTimeout   = config.updateTimeout || 30000;
-
-    this.fakeGatoHistoryService = this.getFakeGatoHistoryService();
-
 }
 
 BlaubergVento.prototype = {
@@ -278,6 +275,8 @@ function BlaubergVentoHumidity(log, config) {
     this.updateTimeout   = config.updateTimeout || 30000;
     this.isFakeGatoEnabled   = config.isFakeGatoEnabled || true;
     this.fakeGatoStoragePath = config.fakeGatoStoragePath || false;
+
+    this.fakeGatoHistoryService = this.getFakeGatoHistoryService();
 
 }
 

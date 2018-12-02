@@ -36,13 +36,14 @@ function BlaubergVento(log, config) {
     this.log = log;
 
     this.name            = config.name || 'Blauberg Vento';
+    this.displayName     = this.name;
     this.humidityName    = config.humidityName || this.name + ' Humidity';
     this.host            = config.host;
     this.port            = config.port || 4000;
     this.serialNumber    = config.serialNumber || '';
     this.updateTimeout   = config.updateTimeout || 30000;
 
-    this.isFakeGatoEnabled   = config.isFakeGatoEnabled || true;
+    this.isFakeGatoEnabled   = config.isFakeGatoEnabled || false;
     this.fakeGatoStoragePath = config.fakeGatoStoragePath || false;
 
 }
@@ -58,18 +59,16 @@ BlaubergVento.prototype = {
         var message = new Buffer(payloadMessage, 'hex');
 
         setTimeout(function() { 
-         
-
-                client.send(message, 0, message.length, port, host, function(err, bytes) {
-                    if (err) throw err;
-          
-                    client.on('message', function(msg, rinfo){
-                        callbackResponse(msg, rinfo);
-                        client.close();
-                    });
-            
-                    callback(err);
+            client.send(message, 0, message.length, port, host, function(err, bytes) {
+                if (err) throw err;
+        
+                client.on('message', function(msg, rinfo){
+                    callbackResponse(msg, rinfo);
+                    client.close();
                 });
+        
+                callback(err);
+            });
                 
         }, delayTime);
 
@@ -90,6 +89,7 @@ BlaubergVento.prototype = {
             }
         }, function (msg, rinfo) {
             that.statusCache = that._parseResponseBuffer(msg);
+            that.addFakeGatoHistoryEntry(that.statusCache[25]);
 
             that.log.info('_getStatusData success');
         });
@@ -169,15 +169,16 @@ BlaubergVento.prototype = {
         });
     },
 
-    addFakeGatoHistoryEntry(humidity) {
+    addFakeGatoHistoryEntry() {
+        var that = this;
         if (
           !this.isFakeGatoEnabled 
         ) {
           return;
         }
-        this.fakeGatoHistoryService.addEntry({
-          time: new Date().getTime() / 1000,
-          humidity: humidity
+        this.fakeGatoHistoryService .addEntry({
+            time: new Date().getTime() / 1000,
+            humidity: that.fanService.getCharacteristic(Characteristic.CurrentRelativeHumidity).value
         });
     },
 
@@ -186,7 +187,7 @@ BlaubergVento.prototype = {
           return undefined;
         }
         const serialNumber = this.serialNumber ;
-        const filename = `fakegato-history_blauberg_${serialNumber}.json`;
+        const filename = `fakegato-history_blauberg_humidity_${serialNumber}.json`;
         const path = this.fakeGatoStoragePath || homebridgeAPI.user.storagePath();
         return new FakeGatoHistoryService("room", this, {
           filename,
@@ -198,7 +199,6 @@ BlaubergVento.prototype = {
 
     getHumidity: function(targetService, callback, context){
         var that = this;
-        that.addFakeGatoHistoryEntry( that.statusCache[25]);
         callback(null,  that.statusCache[25]);
     },
 
@@ -275,10 +275,9 @@ BlaubergVento.prototype = {
             .on('get', this.getHumidity.bind(this, fanService))
         ;
     
+        that.fanService = fanService;
 
         this.services.push(fanService);
-
-        this.fakeGatoHistoryService = this.getFakeGatoHistoryService();
 
         var humidityService = new Service.HumiditySensor(this.humidityName);
         humidityService
@@ -287,10 +286,19 @@ BlaubergVento.prototype = {
         ;
 
         this.services.push(humidityService);
+
+        this.fakeGatoHistoryService = this.getFakeGatoHistoryService();
+      //  if(this.fakeGatoHistoryService){
+            this.services.push(this.fakeGatoHistoryService);
+     //   }
+      
+
+   
      
         that._getStatusData();
         that.updateInverval = setInterval(function(){
             that._getStatusData();
+            that.addFakeGatoHistoryEntry();
         }, that.updateTimeout);
         
         return this.services;

@@ -8,6 +8,8 @@ var homebridgeAPI;
 
 var dgram = require('dgram');
 
+const { version } = require("./package.json");
+
 // EXAMPLE CONFIG
 // {
 //     "accessory": "BlaubergVento",
@@ -28,17 +30,21 @@ module.exports = function (homebridge) {
     FakeGatoHistoryService = require("fakegato-history")(homebridge);
     homebridgeAPI = homebridge;
     homebridge.registerAccessory('homebridge-blauberg-vento', 'BlaubergVento', BlaubergVento);
-    homebridge.registerAccessory('homebridge-blauberg-vento-humidity', 'BlaubergVentoHumidity', BlaubergVentoHumidity);
 };
 
 function BlaubergVento(log, config) {
     this.log = log;
 
     this.name            = config.name || 'Blauberg Vento';
+    this.humidityName    = config.humidityName || this.name + ' Humidity';
     this.host            = config.host;
     this.port            = config.port || 4000;
     this.serialNumber    = config.serialNumber || '';
     this.updateTimeout   = config.updateTimeout || 30000;
+
+    this.isFakeGatoEnabled   = config.isFakeGatoEnabled || true;
+    this.fakeGatoStoragePath = config.fakeGatoStoragePath || false;
+
 }
 
 BlaubergVento.prototype = {
@@ -52,16 +58,12 @@ BlaubergVento.prototype = {
         var message = new Buffer(payloadMessage, 'hex');
 
         setTimeout(function() { 
-            // client.send(broadcast, 0, broadcast.length, port, host, function(err, bytes) {
-            //     if (err) throw err;
+         
 
                 client.send(message, 0, message.length, port, host, function(err, bytes) {
                     if (err) throw err;
-                    
-                 //   console.log('UDP message sent to ' + host +':'+ port, message);
-
+          
                     client.on('message', function(msg, rinfo){
-                     //   console.log('UDP message get', msg);
                         callbackResponse(msg, rinfo);
                         client.close();
                     });
@@ -69,12 +71,10 @@ BlaubergVento.prototype = {
                     callback(err);
                 });
                 
-         //   });
         }, delayTime);
 
     },
 
- 
 
     _parseResponseBuffer: function(data){
         return JSON.parse(JSON.stringify(data)).data;
@@ -169,8 +169,36 @@ BlaubergVento.prototype = {
         });
     },
 
+    addFakeGatoHistoryEntry(humidity) {
+        if (
+          !this.isFakeGatoEnabled 
+        ) {
+          return;
+        }
+        this.fakeGatoHistoryService.addEntry({
+          time: new Date().getTime() / 1000,
+          humidity: humidity
+        });
+    },
+
+    getFakeGatoHistoryService() {
+        if (!this.isFakeGatoEnabled) {
+          return undefined;
+        }
+        const serialNumber = this.serialNumber ;
+        const filename = `fakegato-history_blauberg_${serialNumber}.json`;
+        const path = this.fakeGatoStoragePath || homebridgeAPI.user.storagePath();
+        return new FakeGatoHistoryService("room", this, {
+          filename,
+          path,
+          storage: "fs"
+        });
+    },
+
+
     getHumidity: function(targetService, callback, context){
         var that = this;
+        that.addFakeGatoHistoryEntry( that.statusCache[25]);
         callback(null,  that.statusCache[25]);
     },
 
@@ -217,6 +245,7 @@ BlaubergVento.prototype = {
             .setCharacteristic(Characteristic.Manufacturer, 'Blauberg')
             .setCharacteristic(Characteristic.Model, 'Vento Expert')
             .setCharacteristic(Characteristic.SerialNumber, this.serialNumber)
+            .setCharacteristic(Characteristic.FirmwareRevision, version)
         ;
         this.services.push(informationService);
 
@@ -248,148 +277,17 @@ BlaubergVento.prototype = {
     
 
         this.services.push(fanService);
-     
-        that._getStatusData();
-        that.updateInverval = setInterval(function(){
-            that._getStatusData();
-        }, that.updateTimeout);
-        
-        return this.services;
-    }
-};
 
+        this.fakeGatoHistoryService = this.getFakeGatoHistoryService();
 
-
-
-
-
-
-
-function BlaubergVentoHumidity(log, config) {
-    this.log = log;
-
-    this.name            = config.name || 'Blauberg VentoHumidity';
-    this.host            = config.host;
-    this.port            = config.port || 4000;
-    this.serialNumber    = config.serialNumber || '';
-    this.updateTimeout   = config.updateTimeout || 30000;
-    this.isFakeGatoEnabled   = config.isFakeGatoEnabled || true;
-    this.fakeGatoStoragePath = config.fakeGatoStoragePath || false;
-
-    this.fakeGatoHistoryService = this.getFakeGatoHistoryService();
-
-}
-
-BlaubergVentoHumidity.prototype = {
-
-    udpRequest: function(host, port, payloadMessage, callback, callbackResponse) {
-        if(!callback){callback = function(){};}
-        if(!callbackResponse){callbackResponse = function(){};}
-
-        var client = dgram.createSocket('udp4');
-        var delayTime = Math.floor(Math.random() * 1500) + 1;
-        var message = new Buffer(payloadMessage, 'hex');
-
-        setTimeout(function() { 
-            // client.send(broadcast, 0, broadcast.length, port, host, function(err, bytes) {
-            //     if (err) throw err;
-
-                client.send(message, 0, message.length, port, host, function(err, bytes) {
-                    //if (err) throw err;
-                    
-                 //   console.log('UDP message sent to ' + host +':'+ port, message);
-
-                    client.on('message', function(msg, rinfo){
-                     //   console.log('UDP message get', msg);
-                        callbackResponse(msg, rinfo);
-                        client.close();
-                    });
-            
-                    callback(err);
-                });
-                
-            // });
-        }, delayTime);
-
-    },
-
-    _parseResponseBuffer: function(data){
-        return JSON.parse(JSON.stringify(data)).data;
-    },
-
-    _getStatusData: function(){
-        var that = this;
-        var payload = '6D6F62696C65' + '01' + '01' + '0D0A';
-        
-        this.udpRequest(this.host, this.port, payload, function (error) {
-            if(error) {
-                that.log.error('_getStatusData failed: ' + error.message);
-            }
-        }, function (msg, rinfo) {
-            that.statusCache = that._parseResponseBuffer(msg);
-
-            that.log.info('_getStatusData success');
-        });
-
-    },
-
-    addFakeGatoHistoryEntry(humidity) {
-        if (
-          !this.isFakeGatoEnabled 
-        ) {
-          return;
-        }
-        this.fakeGatoHistoryService.addEntry({
-          time: new Date().getTime() / 1000,
-          humidity: humidity
-        });
-      },
-
-    getHumidity: function(targetService, callback, context){
-        var that = this;
-        that.addFakeGatoHistoryEntry( that.statusCache[25]);
-        callback(null,  that.statusCache[25]);
-    },
-
-    identify: function (callback) {
-        this.log.debug('[%s] identify', this.displayName);
-        callback();
-    },
-
-    getFakeGatoHistoryService() {
-        if (!this.isFakeGatoEnabled) {
-          return undefined;
-        }
-        const serialNumber = this.serialNumber ;
-        const filename = `fakegato-history_blauberg_${serialNumber}.json`;
-        const path = this.fakeGatoStoragePath || homebridgeAPI.user.storagePath();
-        return new FakeGatoHistoryService("room", this, {
-          filename,
-          path,
-          storage: "fs"
-        });
-    },
-
-    getServices: function (){
-        var that = this;
-        this.services = [];
-
-        var informationService = new Service.AccessoryInformation();
-        informationService
-            .setCharacteristic(Characteristic.Manufacturer, 'Blauberg')
-            .setCharacteristic(Characteristic.Model, 'Vento Expert')
-        ;
-        this.services.push(informationService);
-
-
-        var fanService = new Service.HumiditySensor(this.name);
-        fanService
+        var humidityService = new Service.HumiditySensor(this.humidityName);
+        humidityService
             .getCharacteristic(Characteristic.CurrentRelativeHumidity)
             .on('get', this.getHumidity.bind(this, fanService))
         ;
 
-        this.services.push(fanService);
-
+        this.services.push(humidityService);
+     
         that._getStatusData();
         that.updateInverval = setInterval(function(){
             that._getStatusData();

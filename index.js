@@ -89,9 +89,11 @@ BlaubergVento.prototype = {
             }
         }, function (msg, rinfo) {
             that.statusCache = that._parseResponseBuffer(msg);
-            that.addFakeGatoHistoryEntry(that.statusCache[25]);
+            if(that.statusCache){
+                that.addFakeGatoHistoryEntry(that.statusCache[25]);
+            }
 
-            that.log.info('_getStatusData success');
+            that.log.debug('_getStatusData success');
         });
 
     },
@@ -99,14 +101,22 @@ BlaubergVento.prototype = {
     getFilterStatus: function (targetService, callback, context) {
         var that = this;
 
-        callback(null, that.statusCache[31]);
+        if(that.statusCache && that.statusCache.length){
+            callback(null, that.statusCache[31]);
+        }else{
+            callback(true);
+        }
     },
 
 
     getCustomSpeed: function (targetService, callback, context) {
         var that = this;
 
-        callback(null, Math.round(that.statusCache[21]/255*100));
+        if(that.statusCache && that.statusCache.length){
+            callback(null, Math.round(that.statusCache[21]/255*100));
+        }else{
+            callback(true);
+        }
 
     },
 
@@ -122,7 +132,9 @@ BlaubergVento.prototype = {
                 callback(error);
             } else {
                 this.log.info('set speed ' + speed);
-                that.statusCache[21] = Math.round(255/100*speed);
+                if(that.statusCache && that.statusCache.length){
+                    that.statusCache[21] = Math.round(255/100*speed);
+                }
             }
             callback();
         }.bind(this));
@@ -130,8 +142,11 @@ BlaubergVento.prototype = {
 
     getPowerState: function (targetService, callback, context) {
         var that = this;
-
-        callback(null, that.statusCache[7]);
+        if(that.statusCache && that.statusCache.length){
+            callback(null, that.statusCache[7]);
+        }else{
+            callback(true);
+        }
     },
 
     setPowerState: function(targetService, powerState, callback, context){
@@ -161,7 +176,9 @@ BlaubergVento.prototype = {
                         callback(error);
                     } else {
                         that.log.info('setPowerState ' + powerState);
-                        that.statusCache[7] = powerState; 
+                        if(that.statusCache && that.statusCache.length){
+                            that.statusCache[7] = powerState; 
+                        }
                     }
                     callback();
                 });
@@ -199,12 +216,20 @@ BlaubergVento.prototype = {
 
     getHumidity: function(targetService, callback, context){
         var that = this;
-        callback(null,  that.statusCache[25]);
+        if(that.statusCache && that.statusCache.length){
+            callback(null,  that.statusCache[25]);
+        }else{
+            callback(true);
+        }
     },
 
     getFanState: function (targetService, callback, context) {
         var that = this;
-        callback(null,  that.statusCache[23]);
+        if(that.statusCache && that.statusCache.length){
+            callback(null,  that.statusCache[23]);
+        }else{
+            callback(true);
+        }
     },
 
     setFanState: function(targetService, fanState, callback, context) { 
@@ -224,7 +249,9 @@ BlaubergVento.prototype = {
                 callback(error);
             } else {
                 this.log.info('setFanState ' + fanState);
-                that.statusCache[23] = fanState;
+                if(that.statusCache && that.statusCache.length){
+                    that.statusCache[23] = fanState;
+                }
             }
             callback();
         }.bind(this));

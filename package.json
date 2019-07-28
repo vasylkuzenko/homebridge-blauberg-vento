@@ -1,26 +1,54 @@
 {
-  "name": "homebridge-blauberg-vento",
-  "version": "1.2.7",
-  "author": "Vasyl Kuzenko",
-  "description": "",
-  "license": "MIT",
-  "homepage": "",
-  "repository": {
+  "_from": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git",
+  "_id": "homebridge-kb-broadlink-sp@0.1.5",
+  "_inBundle": false,
+  "_integrity": "",
+  "_location": "/homebridge-kb-broadlink-sp",
+  "_phantomChildren": {},
+  "_requested": {
     "type": "git",
-    "url": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-blauberg-vento.git"
+    "raw": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git",
+    "rawSpec": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git",
+    "saveSpec": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git",
+    "fetchSpec": "https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git",
+    "gitCommittish": null
   },
+  "_requiredBy": [
+    "#USER"
+  ],
+  "_resolved": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git#4b0d886a1d0ad8e146c46293ec076ce4afc5ac3f",
+  "_spec": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git",
+  "_where": "/home/pi",
+  "author": "",
+  "bundleDependencies": false,
+  "dependencies": {
+    "broadlink-js-smth": ">=1.0.0"
+  },
+  "deprecated": false,
+  "description": "Homebridge plugin for Broadlink SP2/3",
+  "engines": {
+    "homebridge": ">=0.2.0",
+    "node": ">=0.12.0"
+  },
+  "homepage": "https://bitbucket.org/kuzenkos/homebridge-broadlink-sp#readme",
   "keywords": [
     "homebridge-plugin",
-    "multiswitch",
-    "switch",
-    "radio"
+    "broadlink",
+    "sp",
+    "broadlinksp",
+    "plugin",
+    "homebridge",
+    "sp2"
   ],
+  "license": "MIT",
   "main": "index.js",
-  "engines": {
-    "node": ">=0.12.0",
-    "homebridge": ">=0.2.0"
+  "name": "homebridge-kb-broadlink-sp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git"
   },
-  "dependencies": {
-    "fakegato-history": "^0.5.2"
-  }
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "version": "0.1.6"
 }

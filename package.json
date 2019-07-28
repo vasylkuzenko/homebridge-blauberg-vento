@@ -1,6 +1,6 @@
 {
   "_from": "git+https://kuzenkos@bitbucket.org/kuzenkos/homebridge-broadlink-sp.git",
-  "_id": "homebridge-kb-broadlink-sp@0.1.5",
+  "_id": "homebridge-kb-broadlink-sp",
   "_inBundle": false,
   "_integrity": "",
   "_location": "/homebridge-kb-broadlink-sp",
